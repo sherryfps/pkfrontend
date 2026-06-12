@@ -124,10 +124,27 @@ let warmUpSent = false;
 export const warmUpBackend = () => {
   if (warmUpSent) return;
   warmUpSent = true;
-  // Fire-and-forget health check to wake the server
-  axios.get(`${API_BASE_URL}/actuator/health`, { timeout: 60000 })
-    .then(() => console.log('[PK] Backend warm ✓'))
-    .catch(() => console.log('[PK] Backend warming up...'));
+
+  const MAX_RETRIES = 5;
+  const RETRY_DELAY = 10000; // 10 seconds between retries
+  let attempt = 0;
+
+  const ping = () => {
+    attempt++;
+    console.log(`[PK] Waking backend (attempt ${attempt}/${MAX_RETRIES})...`);
+    axios.get(`${API_BASE_URL}/actuator/health`, { timeout: 60000 })
+      .then(() => console.log('[PK] Backend warm ✓'))
+      .catch(() => {
+        if (attempt < MAX_RETRIES) {
+          console.log(`[PK] Backend still starting... retrying in ${RETRY_DELAY / 1000}s`);
+          setTimeout(ping, RETRY_DELAY);
+        } else {
+          console.warn('[PK] Backend did not respond after max retries. It may still be deploying on Render.');
+        }
+      });
+  };
+
+  ping();
 };
 
 export default apiClient;
